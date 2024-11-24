@@ -60,7 +60,7 @@ fi
 
 # Формируем URL для добавления комментария
 RESOLVED_COMMENT_URL=$(echo "$COMMENT_URL" | sed "s/{CARD_ID}/$CARD_ID/; s/{API_KEY}/$API_KEY/; s/{TOKEN}/$TOKEN/")
-echo "RESOLVED_COMMENT_URL: $RESOLVED_COMMENT_URL"
+echo "Resolved Comment URL: $RESOLVED_COMMENT_URL"
 
 # Добавляем комментарий в карточку Trello
 curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"Commit linked: $COMMIT_MSG\"}" "$RESOLVED_COMMENT_URL"
