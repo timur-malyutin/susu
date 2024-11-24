@@ -60,7 +60,7 @@ curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"Commit link
   "https://api.trello.com/1/cards/$CARD_ID/actions/comments?key=$API_KEY&token=$TOKEN"
 
 # Устанавливаем метку (Label)
-LABEL_COLOR="green" # Цвет метки (green, yellow, orange, red, purple, blue)
+LABEL_COLOR="green"
 LABEL_NAME="Commit Linked"
 EXISTING_LABEL_ID=$(curl -s "https://api.trello.com/1/boards/$BOARD_ID/labels?key=$API_KEY&token=$TOKEN" | jq -r ".[] | select(.name == \"$LABEL_NAME\") | .id")
 
