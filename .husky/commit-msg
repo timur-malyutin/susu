@@ -22,6 +22,7 @@ npx commitlint --edit "$1" || (
 
 # Извлечение сообщения коммита
 COMMIT_MSG=$(cat "$1")
+echo "Commit Message: $COMMIT_MSG"
 
 # Извлечение idShort и Типа изменений
 ID_SHORT=$(echo "$COMMIT_MSG" | grep -oP '^\[\d+\]' | grep -oP '\d+')
@@ -51,7 +52,9 @@ echo "RESOLVED_CARDS_URL: $RESOLVED_CARDS_URL"
 
 # Получаем ID карточки
 CARD_ID=$(curl -s "$RESOLVED_CARDS_URL" | jq -r ".[] | select(.idShort == $ID_SHORT) | .id")
+SHORT_LINK=$(curl -s "$RESOLVED_CARDS_URL" | jq -r ".[] | select(.idShort == $ID_SHORT) | .shortLink")
 echo "CARD_ID: $CARD_ID"
+echo "SHORT_LINK: $SHORT_LINK"
 
 if [ -z "$CARD_ID" ]; then
   echo "Error: No Trello card found with idShort $ID_SHORT."
@@ -63,10 +66,11 @@ RESOLVED_COMMENT_URL=$(echo "$COMMENT_URL" | sed "s/{CARD_ID}/$CARD_ID/; s/{API_
 echo "Resolved Comment URL: $RESOLVED_COMMENT_URL"
 
 # Добавляем комментарий в карточку Trello
-curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"Commit linked: $COMMIT_MSG\"}" "$RESOLVED_COMMENT_URL"
+COMMENT_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"Commit linked: $COMMIT_MSG (https://trello.com/c/$SHORT_LINK)\"}" "$RESOLVED_COMMENT_URL")
 
 if [ $? -eq 0 ]; then
   echo "Commit successfully linked to Trello card $ID_SHORT."
+  echo "Response: $COMMENT_RESPONSE"
 else
   echo "Error: Failed to link commit to Trello card $ID_SHORT."
   exit 1
