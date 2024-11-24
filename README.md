@@ -1,8 +1,1 @@
-asdasds
-asd
-sd
-sad
-asd
-asdasd
-asdsad
-asdasd
+Debil blyat
