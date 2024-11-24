@@ -28,6 +28,27 @@ fetch_card_details() {
   curl -s "$CARDS_URL_RESOLVED" | jq -r ".[] | select(.idShort == $2)"
 }
 
+fetch_existing_comments() {
+  curl -s "https://api.trello.com/1/cards/$1/actions?filter=commentCard&key=$API_KEY&token=$TOKEN" | jq -r '.[].data.text'
+}
+
+generate_comment_text() {
+  EXISTING_COMMENTS="$1"
+  if [ -z "$EXISTING_COMMENTS" ]; then
+    echo "Conclusion of work:
+
+Commit Message: $2
+
+Repository URL: $3"
+  else
+    echo "Update:
+
+Commit Message: $2
+
+Repository URL: $3"
+  fi
+}
+
 add_comment() {
   COMMENT_URL_RESOLVED=$(echo "$COMMENT_URL" | sed "s/{CARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
   curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"$2\"}" "$COMMENT_URL_RESOLVED" > /dev/null
@@ -49,7 +70,9 @@ BOARD_ID=$(fetch_board_id)
 CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 [ -z "$CARD_DETAILS" ] && { echo "Error: Trello card not found."; exit 1; }
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
+EXISTING_COMMENTS=$(fetch_existing_comments "$CARD_ID")
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$(git rev-parse HEAD)"
-add_comment "$CARD_ID" "Commit linked: $COMMIT_MSG ($REPO_URL)"
+COMMENT_TEXT=$(generate_comment_text "$EXISTING_COMMENTS" "$COMMIT_MSG" "$REPO_URL")
+add_comment "$CARD_ID" "$COMMENT_TEXT"
 add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
 echo "Commit successfully linked to Trello card $ID_SHORT."
