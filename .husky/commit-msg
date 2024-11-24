@@ -1,79 +1,49 @@
 #!/bin/sh
 
-# Загружаем переменные из .env
-if [ -f "$(git rev-parse --show-toplevel)/.env" ]; then
-  source "$(git rev-parse --show-toplevel)/.env"
-else
-  echo "Error: .env file not found in the project root."
-  exit 1
-fi
+load_env() {
+  local env_file="$(git rev-parse --show-toplevel)/.env"
+  [ -f "$env_file" ] && source "$env_file" || { echo "Error: .env file not found."; exit 1; }
+  : "${API_KEY:?Missing API_KEY}"; : "${TOKEN:?Missing TOKEN}"; : "${BOARD_NAME:?Missing BOARD_NAME}"; : "${GITHUB_REPO:?Missing GITHUB_REPO}"
+}
 
-# Проверяем, что переменные загружены
-if [ -z "$API_KEY" ] || [ -z "$TOKEN" ] || [ -z "$BOARD_NAME" ] || [ -z "$GITHUB_REPO" ]; then
-  echo "Error: Missing required environment variables. Check your .env file."
-  exit 1
-fi
+validate_commit_msg() {
+  local commit_msg=$(cat "$1")
+  echo "$commit_msg" | grep -qP '^\[\d+\]\[[A-Za-z]+\]' || { echo "Error: Commit message must include [id][Type]."; exit 1; }
+  echo "$commit_msg"
+}
 
-# Проверяем формат сообщения коммита
-npx commitlint --edit "$1" || (
-  echo 'Custom error message: Your commit message does not follow the conventional commit style. Please use one of the following types: Feat, Fix, Docs, Style, Refactor, Perf, Test, Chore, Starter.'
-  exit 1
-)
+fetch_board_id() {
+  local boards_url=$(echo "$BOARDS_URL" | sed "s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
+  curl -s "$boards_url" | jq -r ".[] | select(.name == \"$BOARD_NAME\") | .id"
+}
 
-# Извлечение сообщения коммита
-COMMIT_MSG=$(cat "$1")
-echo "Commit Message: $COMMIT_MSG"
+fetch_card_details() {
+  local cards_url=$(echo "$CARDS_URL" | sed "s/{BOARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
+  local card_data=$(curl -s "$cards_url" | jq -r ".[] | select(.idShort == $2)")
+  echo "$card_data"
+}
 
-# Извлечение idShort из сообщения коммита
-ID_SHORT=$(echo "$COMMIT_MSG" | grep -oP '^\[\d+\]' | grep -oP '\d+')
+add_comment() {
+  local comment_url=$(echo "$COMMENT_URL" | sed "s/{CARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
+  curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"$2\"}" "$comment_url" > /dev/null
+}
 
-if [ -z "$ID_SHORT" ]; then
-  echo "Error: Commit message must include [id]. Example: [6][Feat] Add new feature"
-  exit 1
-fi
+add_label() {
+  local label_id=$(curl -s "https://api.trello.com/1/boards/$1/labels?key=$API_KEY&token=$TOKEN" | jq -r ".[] | select(.name == \"$2\") | .id")
+  if [ -z "$label_id" ]; then
+    label_id=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"name\": \"$2\", \"color\": \"$3\"}" "https://api.trello.com/1/boards/$1/labels?key=$API_KEY&token=$TOKEN" | jq -r '.id')
+  fi
+  curl -s -X POST -H "Content-Type: application/json" -d "{\"value\": \"$label_id\"}" "https://api.trello.com/1/cards/$4/idLabels?key=$API_KEY&token=$TOKEN" > /dev/null
+}
 
-# Формируем URL для получения ID доски
-RESOLVED_BOARDS_URL=$(echo "$BOARDS_URL" | sed "s/{API_KEY}/$API_KEY/; s/{TOKEN}/$TOKEN/")
-BOARD_ID=$(curl -s "$RESOLVED_BOARDS_URL" | jq -r ".[] | select(.name == \"$BOARD_NAME\") | .id")
-
-if [ -z "$BOARD_ID" ]; then
-  echo "Error: No Trello board found with the name \"$BOARD_NAME\"."
-  exit 1
-fi
-
-# Формируем URL для получения карточек
-RESOLVED_CARDS_URL=$(echo "$CARDS_URL" | sed "s/{BOARD_ID}/$BOARD_ID/; s/{API_KEY}/$API_KEY/; s/{TOKEN}/$TOKEN/")
-CARD_ID=$(curl -s "$RESOLVED_CARDS_URL" | jq -r ".[] | select(.idShort == $ID_SHORT) | .id")
-SHORT_LINK=$(curl -s "$RESOLVED_CARDS_URL" | jq -r ".[] | select(.idShort == $ID_SHORT) | .shortLink")
-
-if [ -z "$CARD_ID" ]; then
-  echo "Error: No Trello card found with idShort $ID_SHORT."
-  exit 1
-fi
-
-# Формируем ссылку на коммит
-COMMIT_SHA=$(git rev-parse HEAD)
-REPO_URL="https://github.com/$GITHUB_REPO/commit/$COMMIT_SHA"
-
-# Добавляем комментарий в карточку Trello
-curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"Commit linked: $COMMIT_MSG ($REPO_URL)\"}" \
-  "https://api.trello.com/1/cards/$CARD_ID/actions/comments?key=$API_KEY&token=$TOKEN"
-
-# Устанавливаем метку (Label)
-LABEL_COLOR="green"
-LABEL_NAME="Commit Linked"
-EXISTING_LABEL_ID=$(curl -s "https://api.trello.com/1/boards/$BOARD_ID/labels?key=$API_KEY&token=$TOKEN" | jq -r ".[] | select(.name == \"$LABEL_NAME\") | .id")
-
-if [ -z "$EXISTING_LABEL_ID" ]; then
-  NEW_LABEL_ID=$(curl -s -X POST -H "Content-Type: application/json" \
-    -d "{\"name\": \"$LABEL_NAME\", \"color\": \"$LABEL_COLOR\"}" \
-    "https://api.trello.com/1/boards/$BOARD_ID/labels?key=$API_KEY&token=$TOKEN" | jq -r '.id')
-else
-  NEW_LABEL_ID=$EXISTING_LABEL_ID
-fi
-
-curl -s -X POST -H "Content-Type: application/json" \
-  -d "{\"value\": \"$NEW_LABEL_ID\"}" \
-  "https://api.trello.com/1/cards/$CARD_ID/idLabels?key=$API_KEY&token=$TOKEN"
-
-echo "Commit successfully linked to Trello card $ID_SHORT."
+load_env
+commit_msg=$(validate_commit_msg "$1")
+id_short=$(echo "$commit_msg" | grep -oP '^\[\d+\]' | grep -oP '\d+')
+board_id=$(fetch_board_id) || { echo "Error: Trello board not found."; exit 1; }
+card_details=$(fetch_card_details "$board_id" "$id_short") || { echo "Error: Trello card not found."; exit 1; }
+card_id=$(echo "$card_details" | jq -r '.id') || { echo "Error: Trello card ID missing."; exit 1; }
+short_link=$(echo "$card_details" | jq -r '.shortLink')
+repo_url="https://github.com/$GITHUB_REPO/commit/$(git rev-parse HEAD)"
+add_comment "$card_id" "Commit linked: $commit_msg ($repo_url)"
+add_label "$board_id" "Commit Linked" "green" "$card_id"
+echo "Commit successfully linked to Trello card $id_short."
