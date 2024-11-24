@@ -1,6 +1,6 @@
 export default {
   parserOpts: {
-    headerPattern: /^\[(\d+)]\[(\w+)] (.+)$/,
-    headerCorrespondence: ['idShort', 'type', 'subject'],
+    headerPattern: /^\[([A-Z][a-z]+)(?:]\[([A-Z][a-z]+))?] (.+)$/,
+    headerCorrespondence: ['type', 'secondType', 'subject'],
   },
 }
