@@ -1,4 +1,73 @@
 #!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
 
-npx commitlint --edit "$1" || (echo 'Custom error message: Your commit message does not follow the conventional commit style. Please use one of the following types: feat, fix, docs, style, refactor, perf, test, chore.' && exit 1)
+# Загружаем переменные из .env
+if [ -f "$(git rev-parse --show-toplevel)/.env" ]; then
+  source "$(git rev-parse --show-toplevel)/.env"
+else
+  echo "Error: .env file not found in the project root."
+  exit 1
+fi
+
+# Проверяем, что переменные загружены
+if [ -z "$API_KEY" ] || [ -z "$TOKEN" ] || [ -z "$BOARD_NAME" ]; then
+  echo "Error: Missing required environment variables. Check your .env file."
+  exit 1
+fi
+
+# Проверяем формат сообщения коммита
+npx commitlint --edit "$1" || (
+  echo 'Custom error message: Your commit message does not follow the conventional commit style. Please use one of the following types: Feat, Fix, Docs, Style, Refactor, Perf, Test, Chore, Starter.'
+  exit 1
+)
+
+# Извлечение сообщения коммита
+COMMIT_MSG=$(cat "$1")
+
+# Извлечение idShort и Типа изменений
+ID_SHORT=$(echo "$COMMIT_MSG" | grep -oP '^\[\d+\]' | grep -oP '\d+')
+TYPE=$(echo "$COMMIT_MSG" | grep -oP '\]\[[A-Za-z]+\]' | grep -oP '[A-Za-z]+')
+
+if [ -z "$ID_SHORT" ] || [ -z "$TYPE" ]; then
+  echo "Error: Commit message must include [id][Type]. Example: [6][Feat] Add new feature"
+  exit 1
+fi
+
+# Формируем URL для получения ID доски
+RESOLVED_BOARDS_URL=$(echo "$BOARDS_URL" | sed "s/{API_KEY}/$API_KEY/; s/{TOKEN}/$TOKEN/")
+echo "RESOLVED_BOARDS_URL: $RESOLVED_BOARDS_URL"
+
+# Получение ID доски по её названию
+BOARD_ID=$(curl -s "$RESOLVED_BOARDS_URL" | jq -r ".[] | select(.name == \"$BOARD_NAME\") | .id")
+echo "BOARD_ID: $BOARD_ID"
+
+if [ -z "$BOARD_ID" ]; then
+  echo "Error: No Trello board found with the name \"$BOARD_NAME\"."
+  exit 1
+fi
+
+# Формируем URL для получения карточек
+RESOLVED_CARDS_URL=$(echo "$CARDS_URL" | sed "s/{BOARD_ID}/$BOARD_ID/; s/{API_KEY}/$API_KEY/; s/{TOKEN}/$TOKEN/")
+echo "RESOLVED_CARDS_URL: $RESOLVED_CARDS_URL"
+
+# Получаем ID карточки
+CARD_ID=$(curl -s "$RESOLVED_CARDS_URL" | jq -r ".[] | select(.idShort == $ID_SHORT) | .id")
+echo "CARD_ID: $CARD_ID"
+
+if [ -z "$CARD_ID" ]; then
+  echo "Error: No Trello card found with idShort $ID_SHORT."
+  exit 1
+fi
+
+# Формируем URL для добавления комментария
+RESOLVED_COMMENT_URL=$(echo "$COMMENT_URL" | sed "s/{CARD_ID}/$CARD_ID/; s/{API_KEY}/$API_KEY/; s/{TOKEN}/$TOKEN/")
+echo "Resolved Comment URL: $RESOLVED_COMMENT_URL"
+
+# Добавляем комментарий в карточку Trello
+curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"Commit linked: $COMMIT_MSG\"}" "$RESOLVED_COMMENT_URL"
+
+if [ $? -eq 0 ]; then
+  echo "Commit successfully linked to Trello card $ID_SHORT."
+else
+  echo "Error: Failed to link commit to Trello card $ID_SHORT."
+  exit 1
+fi
