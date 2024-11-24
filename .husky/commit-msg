@@ -24,12 +24,11 @@ npx commitlint --edit "$1" || (
 COMMIT_MSG=$(cat "$1")
 echo "Commit Message: $COMMIT_MSG"
 
-# Извлечение idShort и Типа изменений
+# Извлечение idShort из сообщения коммита
 ID_SHORT=$(echo "$COMMIT_MSG" | grep -oP '^\[\d+\]' | grep -oP '\d+')
-TYPE=$(echo "$COMMIT_MSG" | grep -oP '\]\[[A-Za-z]+\]' | grep -oP '[A-Za-z]+')
 
-if [ -z "$ID_SHORT" ] || [ -z "$TYPE" ]; then
-  echo "Error: Commit message must include [id][Type]. Example: [6][Feat] Add new feature"
+if [ -z "$ID_SHORT" ]; then
+  echo "Error: Commit message must include [id]. Example: [6][Feat] Add new feature"
   exit 1
 fi
 
@@ -55,24 +54,26 @@ fi
 # Формируем ссылку на коммит
 COMMIT_SHA=$(git rev-parse HEAD)
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$COMMIT_SHA"
-TRELLO_CARD_URL="https://trello.com/c/$SHORT_LINK"
-
-# Обновляем карточку: добавляем ссылку на коммит в описание
-CURRENT_DESC=$(curl -s "https://api.trello.com/1/cards/$CARD_ID?fields=desc&key=$API_KEY&token=$TOKEN" | jq -r '.desc')
-UPDATED_DESC="$CURRENT_DESC\n\nLinked commit: $REPO_URL"
-
-curl -s -X PUT -H "Content-Type: application/json" \
-  -d "{\"desc\": \"$UPDATED_DESC\"}" \
-  "https://api.trello.com/1/cards/$CARD_ID?key=$API_KEY&token=$TOKEN"
-
-# Добавляем ссылку на карточку в сообщение коммита, если отсутствует
-if ! echo "$COMMIT_MSG" | grep -q "$TRELLO_CARD_URL"; then
-  echo "$COMMIT_MSG ($TRELLO_CARD_URL)" > "$1"
-  echo "Added Trello card link to commit message."
-fi
 
 # Добавляем комментарий в карточку Trello
 curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"Commit linked: $COMMIT_MSG ($REPO_URL)\"}" \
   "https://api.trello.com/1/cards/$CARD_ID/actions/comments?key=$API_KEY&token=$TOKEN"
+
+# Устанавливаем метку (Label)
+LABEL_COLOR="green" # Цвет метки (green, yellow, orange, red, purple, blue)
+LABEL_NAME="Commit Linked"
+EXISTING_LABEL_ID=$(curl -s "https://api.trello.com/1/boards/$BOARD_ID/labels?key=$API_KEY&token=$TOKEN" | jq -r ".[] | select(.name == \"$LABEL_NAME\") | .id")
+
+if [ -z "$EXISTING_LABEL_ID" ]; then
+  NEW_LABEL_ID=$(curl -s -X POST -H "Content-Type: application/json" \
+    -d "{\"name\": \"$LABEL_NAME\", \"color\": \"$LABEL_COLOR\"}" \
+    "https://api.trello.com/1/boards/$BOARD_ID/labels?key=$API_KEY&token=$TOKEN" | jq -r '.id')
+else
+  NEW_LABEL_ID=$EXISTING_LABEL_ID
+fi
+
+curl -s -X POST -H "Content-Type: application/json" \
+  -d "{\"value\": \"$NEW_LABEL_ID\"}" \
+  "https://api.trello.com/1/cards/$CARD_ID/idLabels?key=$API_KEY&token=$TOKEN"
 
 echo "Commit successfully linked to Trello card $ID_SHORT."
