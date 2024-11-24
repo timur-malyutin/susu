@@ -9,7 +9,7 @@ else
 fi
 
 # Проверяем, что переменные загружены
-if [ -z "$API_KEY" ] || [ -z "$TOKEN" ] || [ -z "$BOARD_NAME" ]; then
+if [ -z "$API_KEY" ] || [ -z "$TOKEN" ] || [ -z "$BOARD_NAME" ] || [ -z "$GITHUB_REPO" ]; then
   echo "Error: Missing required environment variables. Check your .env file."
   exit 1
 fi
@@ -54,7 +54,7 @@ fi
 
 # Формируем ссылку на коммит
 COMMIT_SHA=$(git rev-parse HEAD)
-REPO_URL="https://github.com/YOUR_USERNAME/YOUR_REPO/commit/$COMMIT_SHA"
+REPO_URL="https://github.com/$GITHUB_REPO/commit/$COMMIT_SHA"
 TRELLO_CARD_URL="https://trello.com/c/$SHORT_LINK"
 
 # Обновляем карточку: добавляем ссылку на коммит в описание
@@ -72,7 +72,7 @@ if ! echo "$COMMIT_MSG" | grep -q "$TRELLO_CARD_URL"; then
 fi
 
 # Добавляем комментарий в карточку Trello
-curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"Commit linked: $COMMIT_MSG (https://github.com/YOUR_USERNAME/YOUR_REPO/commit/$COMMIT_SHA)\"}" \
+curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"Commit linked: $COMMIT_MSG ($REPO_URL)\"}" \
   "https://api.trello.com/1/cards/$CARD_ID/actions/comments?key=$API_KEY&token=$TOKEN"
 
 echo "Commit successfully linked to Trello card $ID_SHORT."
