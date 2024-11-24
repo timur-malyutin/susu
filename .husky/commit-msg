@@ -29,6 +29,9 @@ add_comment() {
 }
 
 add_label() {
+  # shellcheck disable=SC3043
+  # shellcheck disable=SC2155
+  # shellcheck disable=SC2046
   local label_id=$(curl -s "https://api.trello.com/1/boards/$1/labels?key=$API_KEY&token=$TOKEN" | jq -r ".[] | select(.name == \"$2\") | .id")
   if [ -z "$label_id" ]; then
     label_id=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"name\": \"$2\", \"color\": \"$3\"}" "https://api.trello.com/1/boards/$1/labels?key=$API_KEY&token=$TOKEN" | jq -r '.id')
