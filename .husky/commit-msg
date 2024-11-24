@@ -2,8 +2,6 @@
 
 load_env() {
   ENV_FILE="$(git rev-parse --show-toplevel)/.env"
-  # shellcheck disable=SC1090
-  # shellcheck disable=SC2015
   [ -f "$ENV_FILE" ] && . "$ENV_FILE" || { echo "Error: .env file not found."; exit 1; }
   : "${API_KEY:?API_KEY is missing in .env}"
   : "${TOKEN:?TOKEN is missing in .env}"
@@ -31,7 +29,7 @@ fetch_card_details() {
 }
 
 fetch_existing_comments() {
-  curl -s "https://api.trello.com/1/cards/$1/actions?filter=commentCard&key=$API_KEY&token=$TOKEN" | jq -r '.[].data.text'
+  curl -s "https://api.trello.com/1/cards/$1/actions?filter=commentCard&key=$API_KEY&token=$TOKEN&limit=1000" | jq -r '.[].data.text'
 }
 
 add_comment() {
@@ -48,15 +46,15 @@ add_label() {
 }
 
 generate_comment_text() {
-  EXISTING_COMMENTS="$1"
-  if [ -z "$EXISTING_COMMENTS" ]; then
+  EXISTING_COMMENTS_COUNT="$1"
+  if [ "$EXISTING_COMMENTS_COUNT" -eq 0 ]; then
     echo "Conclusion of work:
 
 Commit Message: $2
 
 Repository URL: $3"
   else
-    echo "Update:
+    echo "Update #$((EXISTING_COMMENTS_COUNT + 1)):
 
 Commit Message: $2
 
@@ -73,8 +71,9 @@ CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 [ -z "$CARD_DETAILS" ] && { echo "Error: Trello card not found."; exit 1; }
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
 EXISTING_COMMENTS=$(fetch_existing_comments "$CARD_ID")
+EXISTING_COMMENTS_COUNT=$(echo "$EXISTING_COMMENTS" | wc -l | tr -d ' ')
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$(git rev-parse HEAD)"
-COMMENT_TEXT=$(generate_comment_text "$EXISTING_COMMENTS" "$COMMIT_MSG" "$REPO_URL")
+COMMENT_TEXT=$(generate_comment_text "$EXISTING_COMMENTS_COUNT" "$COMMIT_MSG" "$REPO_URL")
 add_comment "$CARD_ID" "$COMMENT_TEXT"
 add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
 echo "Commit successfully linked to Trello card $ID_SHORT."
