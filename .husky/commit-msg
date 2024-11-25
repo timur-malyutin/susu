@@ -70,7 +70,6 @@ add_label() {
   curl -s -X POST -H "Content-Type: application/json" -d "{\"value\": \"$label_id\"}" "$(echo "$ADD_LABEL_URL" | sed "s/{CARD_ID}/$4/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")" > /dev/null
 }
 
-# Функция для добавления вложения (attachment) с ссылкой на коммит
 add_attachment() {
   local card_id="$1"
   local commit_url="$2"
