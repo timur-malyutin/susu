@@ -94,6 +94,7 @@ AUTHOR=$(git log -1 --pretty=format:'%an <%ae>')
 DATE=$(git log -1 --pretty=format:'%ad' --date=iso)
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$COMMIT_HASH"
 
+# Получаем заголовок из коммита
 TITLE=$(echo "$COMMIT_MSG" | sed -n 's/^\[[0-9]\+\]\[[A-Za-z]\+\] //p')
 DESCRIPTION=$(git log -1 --pretty=%B | sed '1d')
 
