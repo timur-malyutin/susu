@@ -10,7 +10,7 @@ load_env() {
   : "${CARDS_URL:?CARDS_URL is missing in .env}"
   : "${COMMENT_URL:?COMMENT_URL is missing in .env}"
   : "${GITHUB_REPO:?GITHUB_REPO is missing in .env}"
-  : "${GITHUB_COMMIT_CUSTOM_FIELD_ID:?GITHUB_COMMIT_CUSTOM_FIELD_ID is missing in .env}"  # Новая переменная для кастомного поля
+  : "${GITHUB_COMMIT_CUSTOM_FIELD_ID:?GITHUB_COMMIT_CUSTOM_FIELD_ID is missing in .env}"
 }
 
 validate_commit_msg() {
@@ -31,7 +31,12 @@ fetch_card_details() {
 
 fetch_custom_field_items() {
   CUSTOM_FIELDS_URL="https://api.trello.com/1/cards/$1/customFieldItems?key=$API_KEY&token=$TOKEN"
-  curl -s "$CUSTOM_FIELDS_URL" | jq -r ".[] | select(.idCustomField == \"$GITHUB_COMMIT_CUSTOM_FIELD_ID\")"
+  curl -s "$CUSTOM_FIELDS_URL" | jq -r ".[] | select(.idCustomField == \"$GITHUB_COMMIT_CUSTOM_FIELD_ID\") | .value.text"
+}
+
+create_custom_field() {
+  curl -s -X POST -H "Content-Type: application/json" -d "{\"name\": \"Commits\", \"type\": \"text\"}" \
+    "https://api.trello.com/1/boards/$1/customFields?key=$API_KEY&token=$TOKEN" | jq -r '.id'
 }
 
 update_custom_field() {
@@ -63,16 +68,16 @@ CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 [ -z "$CARD_DETAILS" ] && { echo "Error: Trello card not found."; exit 1; }
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$(git rev-parse HEAD)"
+
 add_comment "$CARD_ID" "Commit linked: $COMMIT_MSG ($REPO_URL)"
 add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
 
-CUSTOM_FIELD_ITEM=$(fetch_custom_field_items "$CARD_ID")
-if [ -n "$CUSTOM_FIELD_ITEM" ]; then
+CUSTOM_FIELD_VALUE=$(fetch_custom_field_items "$CARD_ID")
+if [ -z "$CUSTOM_FIELD_VALUE" ]; then
   update_custom_field "$CARD_ID" "$REPO_URL"
-  echo "Custom field updated with commit link."
 else
-  echo "Error: Custom field for commit not found on card."
-  exit 1
+  NEW_VALUE="$CUSTOM_FIELD_VALUE\n$REPO_URL"
+  update_custom_field "$CARD_ID" "$NEW_VALUE"
 fi
 
 echo "Commit successfully linked to Trello card $ID_SHORT and custom field updated."
