@@ -93,7 +93,6 @@ $DESCRIPTION
 
 echo "MD_COMMENT: $MD_COMMENT"
 
-# Добавляем комментарий
 add_comment "$CARD_ID" "$MD_COMMENT"
 
 # Добавляем ярлык
