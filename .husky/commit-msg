@@ -1,61 +1,85 @@
 #!/bin/sh
 
+# Загружаем переменные из .env
 load_env() {
   ENV_FILE="$(git rev-parse --show-toplevel)/.env"
-  [ -f "$ENV_FILE" ] && . "$ENV_FILE" || { echo "Error: .env file not found."; exit 1; }
+  if [ -f "$ENV_FILE" ]; then
+    . "$ENV_FILE"
+  else
+    echo "Error: .env file not found."
+    exit 1
+  fi
+
+  # Проверка обязательных переменных
   : "${API_KEY:?API_KEY is missing in .env}"
   : "${TOKEN:?TOKEN is missing in .env}"
   : "${BOARD_NAME:?BOARD_NAME is missing in .env}"
   : "${BOARDS_URL:?BOARDS_URL is missing in .env}"
   : "${CARDS_URL:?CARDS_URL is missing in .env}"
   : "${COMMENT_URL:?COMMENT_URL is missing in .env}"
+  : "${CUSTOM_FIELDS_URL:?CUSTOM_FIELDS_URL is missing in .env}"
   : "${GITHUB_REPO:?GITHUB_REPO is missing in .env}"
   : "${GITHUB_COMMIT_CUSTOM_FIELD_ID:?GITHUB_COMMIT_CUSTOM_FIELD_ID is missing in .env}"
 }
 
+# Проверка формата сообщения коммита
 validate_commit_msg() {
   COMMIT_MSG=$(cat "$1")
-  echo "$COMMIT_MSG" | grep -qP '^\[\d+\]\[[A-Za-z]+\]' || { echo "Error: Commit message must include [id][Type]."; exit 1; }
+  echo "$COMMIT_MSG" | grep -qP '^\[\d+\]\[[A-Za-z]+\]' || {
+    echo "Error: Commit message must include [id][Type]."
+    exit 1
+  }
   echo "$COMMIT_MSG"
 }
 
+# Получение ID доски по имени
 fetch_board_id() {
-  BOARDS_URL_RESOLVED=$(echo "$BOARDS_URL" | sed "s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
-  curl -s "$BOARDS_URL_RESOLVED" | jq -r ".[] | select(.name == \"$BOARD_NAME\") | .id"
+  local resolved_url
+  resolved_url=$(echo "$BOARDS_URL" | sed "s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
+  curl -s "$resolved_url" | jq -r ".[] | select(.name == \"$BOARD_NAME\") | .id"
 }
 
+# Получение деталей карточки по ID доски и номеру карточки
 fetch_card_details() {
-  CARDS_URL_RESOLVED=$(echo "$CARDS_URL" | sed "s/{BOARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
-  curl -s "$CARDS_URL_RESOLVED" | jq -r ".[] | select(.idShort == $2)"
+  local resolved_url
+  resolved_url=$(echo "$CARDS_URL" | sed "s/{BOARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
+  curl -s "$resolved_url" | jq -r ".[] | select(.idShort == $2)"
 }
 
+# Получение пользовательских полей карточки
 fetch_custom_field_items() {
-  CUSTOM_FIELDS_URL="https://api.trello.com/1/cards/$1/customFieldItems?key=$API_KEY&token=$TOKEN"
-  curl -s "$CUSTOM_FIELDS_URL" | jq -r ".[] | select(.idCustomField == \"$GITHUB_COMMIT_CUSTOM_FIELD_ID\")"
+  local resolved_url
+  resolved_url=$(echo "$CUSTOM_FIELDS_URL" | sed "s/{CARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
+  curl -s "$resolved_url" | jq -r ".[] | select(.idCustomField == \"$GITHUB_COMMIT_CUSTOM_FIELD_ID\")"
 }
 
+# Обновление пользовательского поля карточки
 update_custom_field() {
-  CARD_ID=$1
-  FIELD_VALUE=$2
-  curl -s -X PUT -H "Content-Type: application/json" -d "{\"value\": {\"text\": \"$FIELD_VALUE\"}}" \
-    "https://api.trello.com/1/cards/$CARD_ID/customField/$GITHUB_COMMIT_CUSTOM_FIELD_ID/item?key=$API_KEY&token=$TOKEN" > /dev/null
+  local resolved_url
+  resolved_url=$(echo "$CUSTOM_FIELDS_URL" | sed "s/{CARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
+  curl -s -X PUT -H "Content-Type: application/json" -d "{\"value\": {\"text\": \"$2\"}}" "$resolved_url/item" > /dev/null
 }
 
+# Добавление комментария к карточке
 add_comment() {
-  COMMENT_URL_RESOLVED=$(echo "$COMMENT_URL" | sed "s/{CARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
-  COMMENT_TEXT=$(echo "$2" | jq -R -s '.')
-  RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": $COMMENT_TEXT}" "$COMMENT_URL_RESOLVED")
-  echo "Trello API Response: $RESPONSE"
+  local resolved_url
+  resolved_url=$(echo "$COMMENT_URL" | sed "s/{CARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
+  local comment_text
+  comment_text=$(echo "$2" | jq -R -s '.')
+  curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": $comment_text}" "$resolved_url"
 }
 
+# Добавление ярлыка к карточке
 add_label() {
-  LABEL_ID=$(curl -s "https://api.trello.com/1/boards/$1/labels?key=$API_KEY&token=$TOKEN" | jq -r ".[] | select(.name == \"$2\") | .id")
-  if [ -z "$LABEL_ID" ]; then
-    LABEL_ID=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"name\": \"$2\", \"color\": \"$3\"}" "https://api.trello.com/1/boards/$1/labels?key=$API_KEY&token=$TOKEN" | jq -r '.id')
+  local label_id
+  label_id=$(curl -s "$(echo "$LABELS_URL" | sed "s/{BOARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")" | jq -r ".[] | select(.name == \"$2\") | .id")
+  if [ -z "$label_id" ]; then
+    label_id=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"name\": \"$2\", \"color\": \"$3\"}" "$(echo "$LABELS_URL" | sed "s/{BOARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")" | jq -r '.id')
   fi
-  curl -s -X POST -H "Content-Type: application/json" -d "{\"value\": \"$LABEL_ID\"}" "https://api.trello.com/1/cards/$4/idLabels?key=$API_KEY&token=$TOKEN" > /dev/null
+  curl -s -X POST -H "Content-Type: application/json" -d "{\"value\": \"$label_id\"}" "$(echo "$ADD_LABEL_URL" | sed "s/{CARD_ID}/$4/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")" > /dev/null
 }
 
+# Основная логика скрипта
 load_env
 COMMIT_MSG=$(validate_commit_msg "$1")
 ID_SHORT=$(echo "$COMMIT_MSG" | grep -oP '^\[\d+\]' | grep -oP '\d+')
@@ -65,8 +89,6 @@ CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 [ -z "$CARD_DETAILS" ] && { echo "Error: Trello card not found."; exit 1; }
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
 
-echo "CARD_ID: $CARD_ID"
-
 COMMIT_HASH=$(git rev-parse HEAD)
 AUTHOR=$(git log -1 --pretty=format:'%an <%ae>')
 DATE=$(git log -1 --pretty=format:'%ad' --date=iso)
@@ -75,7 +97,6 @@ REPO_URL="https://github.com/$GITHUB_REPO/commit/$COMMIT_HASH"
 TITLE=$(echo "$COMMIT_MSG" | sed -n 's/^\[[0-9]\+\]\[[A-Za-z]\+\] //p')
 DESCRIPTION=$(git log -1 --pretty=%B | sed '1d')
 
-# Формирование комментария
 MD_COMMENT="## Conclusion work:
 
 **Title:** $TITLE
@@ -91,22 +112,14 @@ $DESCRIPTION
 **Author:** $AUTHOR
 **Date:** $DATE"
 
-echo "MD_COMMENT: $MD_COMMENT"
-
 add_comment "$CARD_ID" "$MD_COMMENT"
-
-# Добавляем ярлык
 add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
 
-# Обновляем пользовательское поле с текущим коммитом
 CUSTOM_FIELD_ITEM=$(fetch_custom_field_items "$CARD_ID")
 if [ -n "$CUSTOM_FIELD_ITEM" ]; then
   update_custom_field "$CARD_ID" "$REPO_URL"
-  echo "Custom field updated with commit link: $REPO_URL"
 else
-  echo "Custom field for commit not found. Attempting to create it..."
   update_custom_field "$CARD_ID" "$REPO_URL"
-  echo "Custom field created and updated with commit link: $REPO_URL"
 fi
 
 echo "Commit successfully linked to Trello card $ID_SHORT, comment and custom field updated."
