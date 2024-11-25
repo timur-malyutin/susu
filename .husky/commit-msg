@@ -74,6 +74,8 @@ MD_COMMENT="## Conclusion work:
 **Description:**
 $DESCRIPTION
 
+---
+
 **Commit link:** [$REPO_URL]($REPO_URL)
 
 **Commit Hash:** $COMMIT_HASH
