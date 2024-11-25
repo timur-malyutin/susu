@@ -2,6 +2,8 @@
 
 load_env() {
   ENV_FILE="$(git rev-parse --show-toplevel)/.env"
+  # shellcheck disable=SC1090
+  # shellcheck disable=SC2015
   [ -f "$ENV_FILE" ] && . "$ENV_FILE" || { echo "Error: .env file not found."; exit 1; }
   : "${API_KEY:?API_KEY is missing in .env}"
   : "${TOKEN:?TOKEN is missing in .env}"
@@ -31,14 +33,14 @@ fetch_card_details() {
 
 fetch_custom_field_items() {
   CUSTOM_FIELDS_URL="https://api.trello.com/1/cards/$1/customFieldItems?key=$API_KEY&token=$TOKEN"
-  curl -s "$CUSTOM_FIELDS_URL" | jq -r ".[] | select(.idCustomField == \"$GITHUB_COMMIT_CUSTOM_FIELD_ID\") | .value.text"
+  curl -s "$CUSTOM_FIELDS_URL" | jq -r ".[] | select(.idCustomField == \"$GITHUB_COMMIT_CUSTOM_FIELD_ID\")"
 }
 
-update_custom_field_for_card() {
+update_custom_field() {
   CARD_ID=$1
   FIELD_VALUE=$2
   curl -s -X PUT -H "Content-Type: application/json" -d "{\"value\": {\"text\": \"$FIELD_VALUE\"}}" \
-    "https://api.trello.com/1/cards/$CARD_ID/customField/$GITHUB_COMMIT_CUSTOM_FIELD_ID/item?key=$API_KEY&token=$TOKEN"
+    "https://api.trello.com/1/cards/$CARD_ID/customField/$GITHUB_COMMIT_CUSTOM_FIELD_ID/item?key=$API_KEY&token=$TOKEN" > /dev/null
 }
 
 add_comment() {
@@ -59,26 +61,20 @@ COMMIT_MSG=$(validate_commit_msg "$1")
 ID_SHORT=$(echo "$COMMIT_MSG" | grep -oP '^\[\d+\]' | grep -oP '\d+')
 BOARD_ID=$(fetch_board_id)
 [ -z "$BOARD_ID" ] && { echo "Error: Trello board not found."; exit 1; }
-
 CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 [ -z "$CARD_DETAILS" ] && { echo "Error: Trello card not found."; exit 1; }
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
-
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$(git rev-parse HEAD)"
-
-# Add a comment linking the commit
 add_comment "$CARD_ID" "Commit linked: $COMMIT_MSG ($REPO_URL)"
 add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
 
-# Fetch existing custom field value for the card
-CUSTOM_FIELD_VALUE=$(fetch_custom_field_items "$CARD_ID")
-if [ -z "$CUSTOM_FIELD_VALUE" ]; then
-  # No existing value; set the commit link as the first value
-  update_custom_field_for_card "$CARD_ID" "$REPO_URL"
+CUSTOM_FIELD_ITEM=$(fetch_custom_field_items "$CARD_ID")
+if [ -n "$CUSTOM_FIELD_ITEM" ]; then
+  update_custom_field "$CARD_ID" "$REPO_URL"
+  echo "Custom field updated with commit link."
 else
-  # Append the new commit link to the existing value
-  NEW_VALUE="${CUSTOM_FIELD_VALUE}\n$REPO_URL"
-  update_custom_field_for_card "$CARD_ID" "$NEW_VALUE"
+  echo "Error: Custom field for commit not found on card."
+  exit 1
 fi
 
 echo "Commit successfully linked to Trello card $ID_SHORT and custom field updated."
