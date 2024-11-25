@@ -69,7 +69,7 @@ REPO_URL="https://github.com/$GITHUB_REPO/commit/$(git rev-parse HEAD)"
 # Формирование комментария в .MD формате
 TITLE=$(echo "$COMMIT_MSG" | grep -oP '\[[A-Za-z]+\]' | sed 's/[][]//g')
 DESCRIPTION="Detailed description of the commit."
-MD_COMMENT="## Conclusion work:\n\n**Title:** $TITLE\n\n**Description:** $DESCRIPTION\n\n[$REPO_URL]"
+MD_COMMENT="## Conclusion work:\n\n**Title:** $TITLE\n\n**Description:** $DESCRIPTION\n\n[Commit link]($REPO_URL)"
 
 # Добавляем комментарий
 add_comment "$CARD_ID" "$MD_COMMENT"
@@ -77,13 +77,15 @@ add_comment "$CARD_ID" "$MD_COMMENT"
 # Добавляем ярлык
 add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
 
+# Обновляем пользовательское поле с текущим коммитом
 CUSTOM_FIELD_ITEM=$(fetch_custom_field_items "$CARD_ID")
 if [ -n "$CUSTOM_FIELD_ITEM" ]; then
   update_custom_field "$CARD_ID" "$REPO_URL"
-  echo "Custom field updated with commit link."
+  echo "Custom field updated with commit link: $REPO_URL"
 else
-  echo "Error: Custom field for commit not found on card."
-  exit 1
+  echo "Custom field for commit not found. Attempting to create it..."
+  update_custom_field "$CARD_ID" "$REPO_URL"
+  echo "Custom field created and updated with commit link: $REPO_URL"
 fi
 
-echo "Commit successfully linked to Trello card $ID_SHORT and comment updated in MD format."
+echo "Commit successfully linked to Trello card $ID_SHORT, comment and custom field updated."
