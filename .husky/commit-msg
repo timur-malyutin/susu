@@ -43,7 +43,8 @@ update_custom_field() {
 
 add_comment() {
   COMMENT_URL_RESOLVED=$(echo "$COMMENT_URL" | sed "s/{CARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
-  RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"$2\"}" "$COMMENT_URL_RESOLVED")
+  COMMENT_TEXT=$(echo "$2" | jq -R -s '.')
+  RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": $COMMENT_TEXT}" "$COMMENT_URL_RESOLVED")
   echo "Trello API Response: $RESPONSE"
 }
 
