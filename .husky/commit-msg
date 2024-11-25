@@ -72,7 +72,6 @@ TITLE=$(echo "$COMMIT_MSG" | grep -oP '\[[A-Za-z]+\]' | sed 's/[][]//g')
 DESCRIPTION="Detailed description of the commit."
 MD_COMMENT="## Conclusion work:\n\n**Title:** $TITLE\n**Description:** $DESCRIPTION\n\n**Commit link:** [$REPO_URL]\n\n**Commit Hash:** $COMMIT_HASH\n**Author:** $AUTHOR\n**Date:** $DATE"
 
-# Добавляем комментарий
 add_comment "$CARD_ID" "$MD_COMMENT"
 
 # Добавляем ярлык
