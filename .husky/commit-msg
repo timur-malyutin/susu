@@ -29,14 +29,18 @@ fetch_card_details() {
   curl -s "$CARDS_URL_RESOLVED" | jq -r ".[] | select(.idShort == $2)"
 }
 
-fetch_custom_field_items() {
-  CUSTOM_FIELDS_URL="https://api.trello.com/1/cards/$1/customFieldItems?key=$API_KEY&token=$TOKEN"
-  curl -s "$CUSTOM_FIELDS_URL" | jq -r ".[] | select(.idCustomField == \"$GITHUB_COMMIT_CUSTOM_FIELD_ID\") | .value.text"
+fetch_custom_fields() {
+  curl -s "https://api.trello.com/1/boards/$1/customFields?key=$API_KEY&token=$TOKEN" | jq -r ".[] | select(.id == \"$GITHUB_COMMIT_CUSTOM_FIELD_ID\")"
 }
 
 create_custom_field() {
   curl -s -X POST -H "Content-Type: application/json" -d "{\"name\": \"Commits\", \"type\": \"text\"}" \
     "https://api.trello.com/1/boards/$1/customFields?key=$API_KEY&token=$TOKEN" | jq -r '.id'
+}
+
+fetch_custom_field_items() {
+  CUSTOM_FIELDS_URL="https://api.trello.com/1/cards/$1/customFieldItems?key=$API_KEY&token=$TOKEN"
+  curl -s "$CUSTOM_FIELDS_URL" | jq -r ".[] | select(.idCustomField == \"$GITHUB_COMMIT_CUSTOM_FIELD_ID\") | .value.text"
 }
 
 update_custom_field() {
@@ -64,6 +68,7 @@ COMMIT_MSG=$(validate_commit_msg "$1")
 ID_SHORT=$(echo "$COMMIT_MSG" | grep -oP '^\[\d+\]' | grep -oP '\d+')
 BOARD_ID=$(fetch_board_id)
 [ -z "$BOARD_ID" ] && { echo "Error: Trello board not found."; exit 1; }
+
 CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 [ -z "$CARD_DETAILS" ] && { echo "Error: Trello card not found."; exit 1; }
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
@@ -71,6 +76,13 @@ REPO_URL="https://github.com/$GITHUB_REPO/commit/$(git rev-parse HEAD)"
 
 add_comment "$CARD_ID" "Commit linked: $COMMIT_MSG ($REPO_URL)"
 add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
+
+EXISTING_FIELD=$(fetch_custom_fields "$BOARD_ID")
+if [ -z "$EXISTING_FIELD" ]; then
+  echo "Custom field not found. Creating..."
+  GITHUB_COMMIT_CUSTOM_FIELD_ID=$(create_custom_field "$BOARD_ID")
+  echo "Created custom field with ID: $GITHUB_COMMIT_CUSTOM_FIELD_ID"
+fi
 
 CUSTOM_FIELD_VALUE=$(fetch_custom_field_items "$CARD_ID")
 if [ -z "$CUSTOM_FIELD_VALUE" ]; then
