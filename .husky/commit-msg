@@ -62,15 +62,20 @@ BOARD_ID=$(fetch_board_id)
 CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 [ -z "$CARD_DETAILS" ] && { echo "Error: Trello card not found."; exit 1; }
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
+
 COMMIT_HASH=$(git rev-parse HEAD)
 AUTHOR=$(git log -1 --pretty=format:'%an <%ae>')
 DATE=$(git log -1 --pretty=format:'%ad' --date=iso)
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$COMMIT_HASH"
 
-TITLE=$(echo "$COMMIT_MSG" | grep -oP '\[[A-Za-z]+\]' | sed 's/[][]//g')
-DESCRIPTION="Detailed description of the commit."
-MD_COMMENT="## Conclusion work:\n\n**Title:** $TITLE\n**Description:** $DESCRIPTION\n\n**Commit link:** [$REPO_URL]\n\n**Commit Hash:** $COMMIT_HASH\n**Author:** $AUTHOR\n**Date:** $DATE"
+# Извлечение заголовка и описания из коммита
+TITLE=$(echo "$COMMIT_MSG" | sed -n 's/^\[[0-9]\+\]\[[A-Za-z]\+\] //p')
+DESCRIPTION=$(git log -1 --pretty=%B | sed '1d')
 
+# Формирование комментария
+MD_COMMENT="## Conclusion work:\n\n**Title:** $TITLE\n\n**Description:** $DESCRIPTION\n\n**Commit link:** [$REPO_URL]\n\n**Commit Hash:** $COMMIT_HASH\n**Author:** $AUTHOR\n**Date:** $DATE"
+
+# Добавляем комментарий
 add_comment "$CARD_ID" "$MD_COMMENT"
 
 # Добавляем ярлык
