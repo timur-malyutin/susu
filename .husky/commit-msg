@@ -67,7 +67,18 @@ REPO_URL="https://github.com/$GITHUB_REPO/commit/$COMMIT_HASH"
 TITLE=$(echo "$COMMIT_MSG" | sed -n 's/^\[[0-9]\+\]\[[A-Za-z]\+\] //p')
 DESCRIPTION=$(git log -1 --pretty=%B | sed '1d')
 
-MD_COMMENT="## Conclusion work:\n\n**Title:** $TITLE\n\n**Description:** $DESCRIPTION\n\n**Commit link:** [$REPO_URL]\n\n**Commit Hash:** $COMMIT_HASH\n**Author:** $AUTHOR\n**Date:** $DATE"
+MD_COMMENT="## Conclusion work:
+
+**Title:** $TITLE
+
+**Description:**
+$DESCRIPTION
+
+**Commit link:** [$REPO_URL]($REPO_URL)
+
+**Commit Hash:** $COMMIT_HASH
+**Author:** $AUTHOR
+**Date:** $DATE"
 
 echo "MD_COMMENT: $MD_COMMENT"
 
