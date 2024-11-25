@@ -87,8 +87,8 @@ CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 [ -z "$CARD_DETAILS" ] && { echo "Error: Trello card not found."; exit 1; }
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
 
-# Захватываем хеш текущего коммита, который только что был сделан
-COMMIT_HASH=$(git rev-parse HEAD)
+# Захватываем хеш текущего коммита, который только что был сделан (используем git log)
+COMMIT_HASH=$(git log -1 --format=%H)
 AUTHOR=$(git log -1 --pretty=format:'%an <%ae>')
 DATE=$(git log -1 --pretty=format:'%ad' --date=iso)
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$COMMIT_HASH"
