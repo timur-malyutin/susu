@@ -66,17 +66,14 @@ REPO_URL="https://github.com/$GITHUB_REPO/commit/$(git rev-parse HEAD)"
 add_comment "$CARD_ID" "Commit linked: $COMMIT_MSG ($REPO_URL)"
 add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
 
-# Получаем существующие значения кастомного поля (ссылки на коммиты)
+# Проверка и обновление кастомного поля
 CUSTOM_FIELD_ITEM=$(fetch_custom_field_items "$CARD_ID")
-
-# Если кастомное поле пустое, создаем новый список с текущим коммитом
-if [ -z "$CUSTOM_FIELD_ITEM" ]; then
-  update_custom_field "$CARD_ID" "$REPO_URL"
+if [ -n "$CUSTOM_FIELD_ITEM" ]; then
+  update_custom_field "$CARD_ID" "$REPO_URL"  # Обновляем существующее кастомное поле
+  echo "Custom field updated with commit link."
 else
-  # Если есть история, добавляем новый коммит в конец
-  EXISTING_COMMITS=$(echo "$CUSTOM_FIELD_ITEM" | jq -r '.value.text')
-  UPDATED_COMMITS="$EXISTING_COMMITS\n$REPO_URL"
-  update_custom_field "$CARD_ID" "$UPDATED_COMMITS"
+  echo "Error: Custom field for commit not found on card."
+  exit 1
 fi
 
 echo "Commit successfully linked to Trello card $ID_SHORT and custom field updated."
