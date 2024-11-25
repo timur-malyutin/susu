@@ -78,7 +78,7 @@ CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
 
 # Получаем текущий последний коммит
-COMMIT_HASH=$(git rev-parse --short HEAD)  # Получаем хеш текущего коммита
+COMMIT_HASH=$(git log -1 --format="%H")  # Получаем полный хеш последнего коммита
 AUTHOR=$(git log -1 --pretty=format:'%an <%ae>')  # Получаем автора
 DATE=$(git log -1 --pretty=format:'%ad' --date=iso)  # Получаем дату
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$COMMIT_HASH"
