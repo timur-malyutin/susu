@@ -22,7 +22,6 @@ load_env() {
   : "${GITHUB_COMMIT_CUSTOM_FIELD_ID:?GITHUB_COMMIT_CUSTOM_FIELD_ID is missing in .env}"
 }
 
-# Проверка формата сообщения коммита
 validate_commit_msg() {
   COMMIT_MSG=$(cat "$1")
   echo "$COMMIT_MSG" | grep -qP '^\[\d+\]\[[A-Za-z]+\]' || {
