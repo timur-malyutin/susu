@@ -121,7 +121,6 @@ else
   update_custom_field "$CARD_ID" "$REPO_URL"
 fi
 
-# Добавляем ссылку на коммит как вложение
 add_attachment "$CARD_ID" "$REPO_URL"
 
 echo "Commit successfully linked to Trello card $ID_SHORT, comment, custom field, and attachment added."
