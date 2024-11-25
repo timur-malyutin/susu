@@ -32,7 +32,6 @@ validate_commit_msg() {
   echo "$COMMIT_MSG"
 }
 
-# Получение ID доски по имени
 fetch_board_id() {
   local resolved_url
   resolved_url=$(echo "$BOARDS_URL" | sed "s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
