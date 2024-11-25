@@ -66,10 +66,9 @@ REPO_URL="https://github.com/$GITHUB_REPO/commit/$(git rev-parse HEAD)"
 add_comment "$CARD_ID" "Commit linked: $COMMIT_MSG ($REPO_URL)"
 add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
 
-# Проверка и обновление кастомного поля
 CUSTOM_FIELD_ITEM=$(fetch_custom_field_items "$CARD_ID")
 if [ -n "$CUSTOM_FIELD_ITEM" ]; then
-  update_custom_field "$CARD_ID" "$REPO_URL"  # Обновляем существующее кастомное поле
+  update_custom_field "$CARD_ID" "$REPO_URL"
   echo "Custom field updated with commit link."
 else
   echo "Error: Custom field for commit not found on card."
