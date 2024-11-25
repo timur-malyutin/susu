@@ -29,6 +29,18 @@ fetch_card_details() {
   curl -s "$CARDS_URL_RESOLVED" | jq -r ".[] | select(.idShort == $2)"
 }
 
+fetch_custom_field_items() {
+  CUSTOM_FIELDS_URL="https://api.trello.com/1/cards/$1/customFieldItems?key=$API_KEY&token=$TOKEN"
+  curl -s "$CUSTOM_FIELDS_URL" | jq -r ".[] | select(.idCustomField == \"$GITHUB_COMMIT_CUSTOM_FIELD_ID\")"
+}
+
+update_custom_field() {
+  CARD_ID=$1
+  FIELD_VALUE=$2
+  curl -s -X PUT -H "Content-Type: application/json" -d "{\"value\": {\"text\": \"$FIELD_VALUE\"}}" \
+    "https://api.trello.com/1/cards/$CARD_ID/customField/$GITHUB_COMMIT_CUSTOM_FIELD_ID/item?key=$API_KEY&token=$TOKEN" > /dev/null
+}
+
 add_comment() {
   COMMENT_URL_RESOLVED=$(echo "$COMMENT_URL" | sed "s/{CARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
   curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"$2\"}" "$COMMENT_URL_RESOLVED" > /dev/null
@@ -42,14 +54,6 @@ add_label() {
   curl -s -X POST -H "Content-Type: application/json" -d "{\"value\": \"$LABEL_ID\"}" "https://api.trello.com/1/cards/$4/idLabels?key=$API_KEY&token=$TOKEN" > /dev/null
 }
 
-update_custom_field() {
-  CUSTOM_FIELD_ID=$1
-  CARD_ID=$2
-  FIELD_VALUE=$3
-  curl -s -X PUT -H "Content-Type: application/json" -d "{\"value\": {\"text\": \"$FIELD_VALUE\"}}" \
-    "https://api.trello.com/1/cards/$CARD_ID/customField/$CUSTOM_FIELD_ID/item?key=$API_KEY&token=$TOKEN" > /dev/null
-}
-
 load_env
 COMMIT_MSG=$(validate_commit_msg "$1")
 ID_SHORT=$(echo "$COMMIT_MSG" | grep -oP '^\[\d+\]' | grep -oP '\d+')
@@ -61,5 +65,15 @@ CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$(git rev-parse HEAD)"
 add_comment "$CARD_ID" "Commit linked: $COMMIT_MSG ($REPO_URL)"
 add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
-update_custom_field "$GITHUB_COMMIT_CUSTOM_FIELD_ID" "$CARD_ID" "$REPO_URL"  # Обновляем кастомное поле с ссылкой на коммит
+
+# Проверка и обновление кастомного поля
+CUSTOM_FIELD_ITEM=$(fetch_custom_field_items "$CARD_ID")
+if [ -n "$CUSTOM_FIELD_ITEM" ]; then
+  update_custom_field "$CARD_ID" "$REPO_URL"  # Обновляем существующее кастомное поле
+  echo "Custom field updated with commit link."
+else
+  echo "Error: Custom field for commit not found on card."
+  exit 1
+fi
+
 echo "Commit successfully linked to Trello card $ID_SHORT and custom field updated."
