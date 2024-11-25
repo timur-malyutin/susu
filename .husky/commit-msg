@@ -65,7 +65,16 @@ CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 [ -z "$CARD_DETAILS" ] && { echo "Error: Trello card not found."; exit 1; }
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$(git rev-parse HEAD)"
-add_comment "$CARD_ID" "Commit linked: $COMMIT_MSG ($REPO_URL)"
+
+# Формирование комментария в .MD формате
+TITLE=$(echo "$COMMIT_MSG" | grep -oP '\[[A-Za-z]+\]' | sed 's/[][]//g')
+DESCRIPTION="Detailed description of the commit."
+MD_COMMENT="## Conclusion work:\n\n**Title:** $TITLE\n\n**Description:** $DESCRIPTION\n\n[$REPO_URL]"
+
+# Добавляем комментарий
+add_comment "$CARD_ID" "$MD_COMMENT"
+
+# Добавляем ярлык
 add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
 
 CUSTOM_FIELD_ITEM=$(fetch_custom_field_items "$CARD_ID")
@@ -77,4 +86,4 @@ else
   exit 1
 fi
 
-echo "Commit successfully linked to Trello card $ID_SHORT and custom field updated."
+echo "Commit successfully linked to Trello card $ID_SHORT and comment updated in MD format."

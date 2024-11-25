@@ -95,7 +95,7 @@ export default [
         typescript: {},
       },
     },
-    ignores: ['node_modules/*', 'public/*', 'dist/*'],
+    ignores: ['node_modules/*', 'public/*', 'dist/*', 'src/*.*', 'src/test/*.*'],
   },
   {
     files: ['**/*.js', '**/*.jsx'],
