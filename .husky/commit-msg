@@ -48,6 +48,14 @@ add_comment() {
   echo "Trello API Response: $RESPONSE"
 }
 
+add_label() {
+  LABEL_ID=$(curl -s "https://api.trello.com/1/boards/$1/labels?key=$API_KEY&token=$TOKEN" | jq -r ".[] | select(.name == \"$2\") | .id")
+  if [ -z "$LABEL_ID" ]; then
+    LABEL_ID=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"name\": \"$2\", \"color\": \"$3\"}" "https://api.trello.com/1/boards/$1/labels?key=$API_KEY&token=$TOKEN" | jq -r '.id')
+  fi
+  curl -s -X POST -H "Content-Type: application/json" -d "{\"value\": \"$LABEL_ID\"}" "https://api.trello.com/1/cards/$4/idLabels?key=$API_KEY&token=$TOKEN" > /dev/null
+}
+
 load_env
 COMMIT_MSG=$(validate_commit_msg "$1")
 ID_SHORT=$(echo "$COMMIT_MSG" | grep -oP '^\[\d+\]' | grep -oP '\d+')
@@ -67,6 +75,7 @@ REPO_URL="https://github.com/$GITHUB_REPO/commit/$COMMIT_HASH"
 TITLE=$(echo "$COMMIT_MSG" | sed -n 's/^\[[0-9]\+\]\[[A-Za-z]\+\] //p')
 DESCRIPTION=$(git log -1 --pretty=%B | sed '1d')
 
+# Формирование комментария
 MD_COMMENT="## Conclusion work:
 
 **Title:** $TITLE
@@ -84,4 +93,21 @@ $DESCRIPTION
 
 echo "MD_COMMENT: $MD_COMMENT"
 
+# Добавляем комментарий
 add_comment "$CARD_ID" "$MD_COMMENT"
+
+# Добавляем ярлык
+add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
+
+# Обновляем пользовательское поле с текущим коммитом
+CUSTOM_FIELD_ITEM=$(fetch_custom_field_items "$CARD_ID")
+if [ -n "$CUSTOM_FIELD_ITEM" ]; then
+  update_custom_field "$CARD_ID" "$REPO_URL"
+  echo "Custom field updated with commit link: $REPO_URL"
+else
+  echo "Custom field for commit not found. Attempting to create it..."
+  update_custom_field "$CARD_ID" "$REPO_URL"
+  echo "Custom field created and updated with commit link: $REPO_URL"
+fi
+
+echo "Commit successfully linked to Trello card $ID_SHORT, comment and custom field updated."
