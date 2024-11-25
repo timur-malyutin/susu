@@ -61,16 +61,6 @@ add_comment() {
   curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": $comment_text}" "$resolved_url"
 }
 
-add_label() {
-  local label_id
-  label_id=$(curl -s "$(echo "$LABELS_URL" | sed "s/{BOARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")" | jq -r ".[] | select(.name == \"$2\") | .id")
-  if [ -z "$label_id" ]; then
-    label_id=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"name\": \"$2\", \"color\": \"$3\"}" "$(echo "$LABELS_URL" | sed "s/{BOARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")" | jq -r '.id')
-  fi
-  curl -s -X POST -H "Content-Type: application/json" -d "{\"value\": \"$label_id\"}" "$(echo "$ADD_LABEL_URL" | sed "s/{CARD_ID}/$4/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")" > /dev/null
-}
-
-# Функция для добавления вложения (attachment) с ссылкой на коммит
 add_attachment() {
   local card_id="$1"
   local commit_url="$2"
@@ -87,17 +77,17 @@ CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 [ -z "$CARD_DETAILS" ] && { echo "Error: Trello card not found."; exit 1; }
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
 
-# Захватываем хеш текущего коммита, который только что был сделан
-# Используем git rev-parse, чтобы получить текущий коммит
-COMMIT_HASH=$(git rev-parse --short HEAD)
-AUTHOR=$(git log -1 --pretty=format:'%an <%ae>')
-DATE=$(git log -1 --pretty=format:'%ad' --date=iso)
+# Получаем текущий последний коммит
+COMMIT_HASH=$(git rev-parse --short HEAD)  # Получаем хеш текущего коммита
+AUTHOR=$(git log -1 --pretty=format:'%an <%ae>')  # Получаем автора
+DATE=$(git log -1 --pretty=format:'%ad' --date=iso)  # Получаем дату
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$COMMIT_HASH"
 
 # Получаем заголовок из коммита
 TITLE=$(echo "$COMMIT_MSG" | sed -n 's/^\[[0-9]\+\]\[[A-Za-z]\+\] //p')
-DESCRIPTION=$(git log -1 --pretty=%B | sed '1d')
+DESCRIPTION=$(git log -1 --pretty=%B | sed '1d')  # Описание коммита (убираем заголовок)
 
+# Формируем комментарий для Trello
 MD_COMMENT="## Conclusion work:
 
 **Title:** $TITLE
@@ -113,11 +103,10 @@ $DESCRIPTION
 **Author:** $AUTHOR
 **Date:** $DATE"
 
-# Добавляем комментарий
+# Добавляем комментарий в карточку
 add_comment "$CARD_ID" "$MD_COMMENT"
-add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
 
-# Обновляем поле с коммитом
+# Обновляем поле с коммитом в карточке
 CUSTOM_FIELD_ITEM=$(fetch_custom_field_items "$CARD_ID")
 if [ -n "$CUSTOM_FIELD_ITEM" ]; then
   update_custom_field "$CARD_ID" "$REPO_URL"
