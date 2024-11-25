@@ -70,6 +70,7 @@ add_label() {
   curl -s -X POST -H "Content-Type: application/json" -d "{\"value\": \"$label_id\"}" "$(echo "$ADD_LABEL_URL" | sed "s/{CARD_ID}/$4/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")" > /dev/null
 }
 
+# Функция для добавления вложения (attachment) с ссылкой на коммит
 add_attachment() {
   local card_id="$1"
   local commit_url="$2"
@@ -86,6 +87,7 @@ CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 [ -z "$CARD_DETAILS" ] && { echo "Error: Trello card not found."; exit 1; }
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
 
+# Захватываем хеш текущего коммита, который только что был сделан
 COMMIT_HASH=$(git rev-parse HEAD)
 AUTHOR=$(git log -1 --pretty=format:'%an <%ae>')
 DATE=$(git log -1 --pretty=format:'%ad' --date=iso)
@@ -109,9 +111,11 @@ $DESCRIPTION
 **Author:** $AUTHOR
 **Date:** $DATE"
 
+# Добавляем комментарий
 add_comment "$CARD_ID" "$MD_COMMENT"
 add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
 
+# Обновляем поле с коммитом
 CUSTOM_FIELD_ITEM=$(fetch_custom_field_items "$CARD_ID")
 if [ -n "$CUSTOM_FIELD_ITEM" ]; then
   update_custom_field "$CARD_ID" "$REPO_URL"
@@ -119,6 +123,7 @@ else
   update_custom_field "$CARD_ID" "$REPO_URL"
 fi
 
+# Добавляем ссылку на коммит как вложение
 add_attachment "$CARD_ID" "$REPO_URL"
 
 echo "Commit successfully linked to Trello card $ID_SHORT, comment, custom field, and attachment added."
