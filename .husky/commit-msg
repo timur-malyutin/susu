@@ -43,15 +43,8 @@ update_custom_field() {
 
 add_comment() {
   COMMENT_URL_RESOLVED=$(echo "$COMMENT_URL" | sed "s/{CARD_ID}/$1/;s/{API_KEY}/$API_KEY/;s/{TOKEN}/$TOKEN/")
-  curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"$2\"}" "$COMMENT_URL_RESOLVED" > /dev/null
-}
-
-add_label() {
-  LABEL_ID=$(curl -s "https://api.trello.com/1/boards/$1/labels?key=$API_KEY&token=$TOKEN" | jq -r ".[] | select(.name == \"$2\") | .id")
-  if [ -z "$LABEL_ID" ]; then
-    LABEL_ID=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"name\": \"$2\", \"color\": \"$3\"}" "https://api.trello.com/1/boards/$1/labels?key=$API_KEY&token=$TOKEN" | jq -r '.id')
-  fi
-  curl -s -X POST -H "Content-Type: application/json" -d "{\"value\": \"$LABEL_ID\"}" "https://api.trello.com/1/cards/$4/idLabels?key=$API_KEY&token=$TOKEN" > /dev/null
+  RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "{\"text\": \"$2\"}" "$COMMENT_URL_RESOLVED")
+  echo "Trello API Response: $RESPONSE"
 }
 
 load_env
@@ -63,33 +56,18 @@ CARD_DETAILS=$(fetch_card_details "$BOARD_ID" "$ID_SHORT")
 [ -z "$CARD_DETAILS" ] && { echo "Error: Trello card not found."; exit 1; }
 CARD_ID=$(echo "$CARD_DETAILS" | jq -r '.id')
 
+echo "CARD_ID: $CARD_ID"
+
 COMMIT_HASH=$(git rev-parse HEAD)
 AUTHOR=$(git log -1 --pretty=format:'%an <%ae>')
 DATE=$(git log -1 --pretty=format:'%ad' --date=iso)
 REPO_URL="https://github.com/$GITHUB_REPO/commit/$COMMIT_HASH"
 
-# Извлечение заголовка и описания из коммита
 TITLE=$(echo "$COMMIT_MSG" | sed -n 's/^\[[0-9]\+\]\[[A-Za-z]\+\] //p')
 DESCRIPTION=$(git log -1 --pretty=%B | sed '1d')
 
-# Формирование комментария
 MD_COMMENT="## Conclusion work:\n\n**Title:** $TITLE\n\n**Description:** $DESCRIPTION\n\n**Commit link:** [$REPO_URL]\n\n**Commit Hash:** $COMMIT_HASH\n**Author:** $AUTHOR\n**Date:** $DATE"
 
-# Добавляем комментарий
+echo "MD_COMMENT: $MD_COMMENT"
+
 add_comment "$CARD_ID" "$MD_COMMENT"
-
-# Добавляем ярлык
-add_label "$BOARD_ID" "Commit Linked" "green" "$CARD_ID"
-
-# Обновляем пользовательское поле с текущим коммитом
-CUSTOM_FIELD_ITEM=$(fetch_custom_field_items "$CARD_ID")
-if [ -n "$CUSTOM_FIELD_ITEM" ]; then
-  update_custom_field "$CARD_ID" "$REPO_URL"
-  echo "Custom field updated with commit link: $REPO_URL"
-else
-  echo "Custom field for commit not found. Attempting to create it..."
-  update_custom_field "$CARD_ID" "$REPO_URL"
-  echo "Custom field created and updated with commit link: $REPO_URL"
-fi
-
-echo "Commit successfully linked to Trello card $ID_SHORT, comment and custom field updated."
